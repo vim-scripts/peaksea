@@ -1,8 +1,8 @@
 " Vim colour file --- PSC
 " Maintainer:	Pan, Shi Zhu <Go to the following URL for my email>
 " URL:		http://vim.sourceforge.net/scripts/script.php?script_id=760
-" Last Change:	18 July 2006
-" Version:	2.9
+" Last Change:	23 Oct 2006
+" Version:	3.00
 "
 "	Please prepend [VIM] in the title when writing e-mail to me, or it will
 "	be automatically treated as spam and removed. 
@@ -20,6 +20,7 @@ if !has("user_commands")
   finish
 end
 
+" Init the option to the default value if not defined by user.
 function! s:init_option(var, value)
   if !exists("g:psc_".a:var)
     execute "let s:".a:var." = ".a:value
@@ -29,6 +30,7 @@ function! s:init_option(var, value)
 endfunction
 command! -nargs=+ InitOpt call s:init_option(<f-args>)
 
+" give highlight setting to multiple highlight groups, maximum 20
 function! s:multi_hi(setting, ...)
   let l:idx = a:0
   while l:idx > 0
@@ -40,22 +42,14 @@ endfunction
 command! -nargs=+ MultiHi call s:multi_hi(<f-args>)
 
 InitOpt style 'cool'
+InitOpt cterm_transparent 0
 InitOpt inversed_todo 0
 InitOpt use_default_for_cterm 0
 InitOpt statement_different_from_type 0
-if s:style == 'warm'
-  InitOpt fontface 'mixed'
-else
-  InitOpt fontface 'plain'
-endif
 
 if !has("gui_running")
   call s:init_option("cterm_style", "'".s:style."'")
 
-  " Forces 'cool' style when gui is not present Since the 'warm' style for
-  " terminal isn't available now, and probably never will be.
-  if s:cterm_style=='warm' | let s:cterm_style = 'cool'
-  endif
   if s:use_default_for_cterm==1 | let s:cterm_style = 'default'
   elseif s:use_default_for_cterm==2 | let s:cterm_style = 'defdark'
   endif
@@ -64,23 +58,55 @@ endif
 
 InitOpt other_style 0
 
-if has("gui_running")
-  if s:style=='warm' || s:style=='default'
-    set background=light
+" WJMc had changed a version of this, however, it will messed up some features
+" when the psc_style being other values than 'warm' and 'cool'. The psc_style
+" is designed to accept any colorscheme name, such as 'desert'.  The following
+" code follows the basic principle of WJMc's code.
+if &background=='light'
+  if has("gui_running")
+    if s:style=='warm' || s:style=='default'
+      " nothing to do
+    elseif s:style=='cool'
+      let s:style = 'warm'
+    elseif s:style=='defdark'
+      let s:style = 'default'
+    else 
+      let s:other_style = 1
+    endif
+  else
+    if s:cterm_style=='cool' || s:cterm_style=='defdark' || s:cterm_style=='warm'
+      let s:cterm_style='default'
+    elseif s:cterm_style=='default'
+      " nothing to do
+    else 
+      let s:other_style = 1
+    endif
+  endif
+elseif &background=='dark'
+  if s:style=='warm' 
+    let s:style = 'cool'
+  elseif s:style=='default'
+    let s:style = 'defdark'
   elseif s:style=='cool' || s:style=='defdark'
-    set background=dark
-  else | let s:other_style = 1
+    " nothing to do
+  else 
+    let s:other_style = 1
   endif
+  let s:cterm_style = s:style
 else
-  if s:cterm_style=='cool' || s:cterm_style=='defdark'
-    set background=dark
-  elseif s:cterm_style=='default'
-    set background=light
-  else | let s:other_style = 1
-  endif
+  echo "unrecognized background=" &background ", ps_color halt.\n"
+  finish
+endif
+
+" This should be after the style mangling
+if s:style == 'warm'
+  InitOpt fontface 'mixed'
+else
+  InitOpt fontface 'plain'
 endif
 
 
+" === Traditional Color Scheme script starts here. ===
 highlight clear
 
 if exists("syntax_on")
@@ -89,7 +115,8 @@ endif
 
 let s:color_name = expand("<sfile>:t:r")
 
-if s:other_style==0 | let g:colors_name = s:color_name
+if s:other_style==0 
+  let g:colors_name = s:color_name
   " Go from console version to gui, the color scheme should be sourced again
   execute "autocmd TermChanged * if g:colors_name == '".s:color_name."' | "
 	\."colo ".s:color_name." | endif"
@@ -98,8 +125,14 @@ else
 endif
 
 " Command to go different schemes easier.
-execute "command! -nargs=1 Colo if '".s:color_name."'!=\"<args>\" | "
-	\'let g:psc_style = "<args>"| endif | colo '.s:color_name
+" This is a multi-purpose command, might be a poor design.
+" WJMc had a change for this, but the 'reloaded' style and other colorscheme
+" cannot be launched that way.
+execute "command! -nargs=1 Colo if '".s:color_name."'!=\"<args>\" |".
+	\'let g:psc_style = "<args>"| endif |'.
+	\'if g:psc_style=="warm" | set background=light | endif |'.
+	\'if g:psc_style=="cool" | set background=dark | endif |'.
+	\'colo '.s:color_name
 
 " Give control to 'reloaded' scheme if possible
 if s:style == 'reloaded'
@@ -113,7 +146,7 @@ endif
 " :h psc-cterm-color-table
 " :ru syntax/hitest.vim
 "
-" Hardcoded Colors Comment:
+" Hard coded Colors Comment:
 " #aabbcc = Red aa, Green bb, Blue cc
 " we must use hard-coded colours to get more 'tender' colours
 "
@@ -127,71 +160,73 @@ if s:style=='warm'
   " LIGHT COLOR DEFINE START
 
   highlight Normal		guifg=#000000	guibg=#e0e0e0
-  highlight Search		guifg=#902000	guibg=#f8f8f8
-  highlight Visual		guifg=fg	guibg=#a6caf0
+  highlight Search		guifg=NONE	guibg=#f8f8f8
+  highlight Visual		guifg=NONE	guibg=#a6caf0
   highlight Cursor		guifg=#f0f0f0	guibg=#008000
   " The idea of CursorIM is pretty good, however, the feature is still buggy
   " in the current version (Vim 7.0). 
   " The following line will be kept commented until the bug fixed.
   "
   " highlight CursorIM		guifg=#f0f0f0	guibg=#800080
-  highlight Special		guifg=#907000	guibg=bg
-  highlight Comment		guifg=#606000	guibg=bg
-  highlight Number		guifg=#907000	guibg=bg
-  highlight Constant		guifg=#007068	guibg=bg
+  highlight Special		guifg=#907000	guibg=NONE
+  highlight Comment		guifg=#606000	guibg=NONE
+  highlight Number		guifg=#907000	guibg=NONE
+  highlight Constant		guifg=#007068	guibg=NONE
   highlight StatusLine		guifg=fg	guibg=#a6caf0
-  highlight LineNr		guifg=#686868	guibg=bg
+  highlight LineNr		guifg=#686868	guibg=NONE
   highlight Question		guifg=fg	guibg=#d0d090
-  highlight PreProc		guifg=#009030	guibg=bg
+  highlight PreProc		guifg=#009030	guibg=NONE
   if s:statement_different_from_type==1
-    highlight Statement		guifg=#4020a0	guibg=bg
+    highlight Statement		guifg=#4020a0	guibg=NONE
   else
-    highlight Statement		guifg=#2060a8	guibg=bg
+    highlight Statement		guifg=#2060a8	guibg=NONE
   endif
-  highlight Type		guifg=#0850a0	guibg=bg
+  highlight Type		guifg=#0850a0	guibg=NONE
   if s:inversed_todo==1
     highlight Todo		guifg=#e0e090	guibg=#000080
   else
     highlight Todo		guifg=#800000	guibg=#e0e090
   endif
   " NOTE THIS IS IN THE WARM SECTION
-  highlight Error		guifg=#c03000	guibg=bg
-  highlight Identifier		guifg=#a030a0	guibg=bg
+  highlight Error		guifg=#c03000	guibg=NONE
+  highlight Identifier		guifg=#a030a0	guibg=NONE
   highlight ModeMsg		guifg=fg	guibg=#b0b0e0
   highlight VisualNOS		guifg=fg	guibg=#b0b0e0
-  highlight SpecialKey		guifg=#1050a0	guibg=bg
+  highlight SpecialKey		guifg=#1050a0	guibg=NONE
   highlight NonText		guifg=#002090	guibg=#d0d0d0
-  highlight Directory		guifg=#a030a0	guibg=bg
+  highlight Directory		guifg=#a030a0	guibg=NONE
   highlight ErrorMsg		guifg=fg	guibg=#f0b090
-  highlight MoreMsg		guifg=#489000	guibg=bg
-  highlight Title		guifg=#a030a0	guibg=bg
-  highlight WarningMsg		guifg=#b02000	guibg=bg
+  highlight MoreMsg		guifg=#489000	guibg=NONE
+  highlight Title		guifg=#a030a0	guibg=NONE
+  highlight WarningMsg		guifg=#b02000	guibg=NONE
   highlight WildMenu		guifg=fg	guibg=#d0d090
-  highlight Folded		guifg=fg	guibg=#b0e0b0
+  highlight Folded		guifg=NONE	guibg=#b0e0b0
   highlight FoldColumn		guifg=fg	guibg=#90e090
-  highlight DiffAdd		guifg=fg	guibg=#b0b0e0
-  highlight DiffChange		guifg=fg	guibg=#e0b0e0
+  highlight DiffAdd		guifg=NONE	guibg=#b0b0e0
+  highlight DiffChange		guifg=NONE	guibg=#e0b0e0
   highlight DiffDelete		guifg=#002090	guibg=#d0d0d0
-  highlight DiffText		guifg=fg	guibg=#c0e080
+  highlight DiffText		guifg=NONE	guibg=#c0e080
   highlight SignColumn		guifg=fg	guibg=#90e090
   highlight IncSearch		guifg=#f0f0f0	guibg=#806060
   highlight StatusLineNC	guifg=fg	guibg=#c0c0c0
   highlight VertSplit		guifg=fg	guibg=#c0c0c0
-  highlight Underlined		guifg=#6a5acd	guibg=bg	gui=underline
-  highlight Ignore		guifg=bg	guibg=bg
+  highlight Underlined		guifg=#6a5acd	guibg=NONE	gui=underline
+  highlight Ignore		guifg=bg	guibg=NONE
   " NOTE THIS IS IN THE WARM SECTION
   if v:version >= 700
-    highlight SpellBad		guifg=NONE	guibg=NONE	guisp=#c03000
-    highlight SpellCap		guifg=NONE	guibg=NONE	guisp=#2060a8
-    highlight SpellRare		guifg=NONE	guibg=NONE	guisp=#a030a0
-    highlight SpellLocal	guifg=NONE	guibg=NONE	guisp=#007068
+    if has('spell')
+      highlight SpellBad	guifg=NONE	guibg=NONE	guisp=#c03000
+      highlight SpellCap	guifg=NONE	guibg=NONE	guisp=#2060a8
+      highlight SpellRare	guifg=NONE	guibg=NONE	guisp=#a030a0
+      highlight SpellLocal	guifg=NONE	guibg=NONE	guisp=#007068
+    endif
     highlight Pmenu		guifg=fg	guibg=#e0b0e0
     highlight PmenuSel		guifg=#f0f0f0	guibg=#806060
     highlight PmenuSbar		guifg=fg	guibg=#c0c0c0
     highlight PmenuThumb	guifg=fg	guibg=#c0e080
     highlight TabLine		guifg=fg	guibg=#c0c0c0	gui=underline
     highlight TabLineFill	guifg=fg	guibg=#c0c0c0	gui=underline
-    highlight TabLineSel	guifg=fg	guibg=bg
+    highlight TabLineSel	guifg=fg	guibg=NONE
     highlight CursorColumn	guifg=NONE	guibg=#f0b090
     highlight CursorLine	guifg=NONE	guibg=NONE	gui=underline
     highlight MatchParen	guifg=NONE	guibg=#c0e080
@@ -204,67 +239,69 @@ elseif s:style=='cool'
   " DARK COLOR DEFINE START
 
   highlight Normal		guifg=#d0d0d0	guibg=#202020
-  highlight Comment		guifg=#d0d090	guibg=bg
-  highlight Constant		guifg=#80c0e0	guibg=bg
-  highlight Number		guifg=#e0c060	guibg=bg
-  highlight Identifier		guifg=#f0c0f0	guibg=bg
+  highlight Comment		guifg=#d0d090	guibg=NONE
+  highlight Constant		guifg=#80c0e0	guibg=NONE
+  highlight Number		guifg=#e0c060	guibg=NONE
+  highlight Identifier		guifg=#f0c0f0	guibg=NONE
   if s:statement_different_from_type==1
-    highlight Statement		guifg=#98a8f0	guibg=bg
+    highlight Statement		guifg=#98a8f0	guibg=NONE
   else
-    highlight Statement		guifg=#c0d8f8	guibg=bg
+    highlight Statement		guifg=#c0d8f8	guibg=NONE
   endif
-  highlight PreProc		guifg=#60f080	guibg=bg
-  highlight Type		guifg=#b0d0f0	guibg=bg
-  highlight Special		guifg=#e0c060	guibg=bg
-  highlight Error		guifg=#f08060	guibg=bg
+  highlight PreProc		guifg=#60f080	guibg=NONE
+  highlight Type		guifg=#b0d0f0	guibg=NONE
+  highlight Special		guifg=#e0c060	guibg=NONE
+  highlight Error		guifg=#f08060	guibg=NONE
   if s:inversed_todo==1
     highlight Todo		guifg=#d0d090	guibg=#000080
   else
     highlight Todo		guifg=#800000	guibg=#d0d090
   endif
-  highlight Search		guifg=#e0e0e0	guibg=#800000
+  highlight Search		guifg=NONE	guibg=#800000
   highlight Visual		guifg=#000000	guibg=#a6caf0
   highlight Cursor		guifg=#000000	guibg=#00f000
   " NOTE THIS IS IN THE COOL SECTION
   " highlight CursorIM		guifg=#000000	guibg=#f000f0
   highlight StatusLine		guifg=#000000	guibg=#a6caf0
-  highlight LineNr		guifg=#b0b0b0	guibg=bg
+  highlight LineNr		guifg=#b0b0b0	guibg=NONE
   highlight Question		guifg=#000000	guibg=#d0d090
   highlight ModeMsg		guifg=fg	guibg=#000080
   highlight VisualNOS		guifg=fg	guibg=#000080
-  highlight SpecialKey		guifg=#b0d0f0	guibg=bg
+  highlight SpecialKey		guifg=#b0d0f0	guibg=NONE
   highlight NonText		guifg=#6080f0	guibg=#101010
-  highlight Directory		guifg=#80c0e0	guibg=bg
+  highlight Directory		guifg=#80c0e0	guibg=NONE
   highlight ErrorMsg		guifg=#d0d090	guibg=#800000
-  highlight MoreMsg		guifg=#c0e080	guibg=bg
-  highlight Title		guifg=#f0c0f0	guibg=bg
-  highlight WarningMsg		guifg=#f08060	guibg=bg
+  highlight MoreMsg		guifg=#c0e080	guibg=NONE
+  highlight Title		guifg=#f0c0f0	guibg=NONE
+  highlight WarningMsg		guifg=#f08060	guibg=NONE
   highlight WildMenu		guifg=#000000	guibg=#d0d090
-  highlight Folded		guifg=#d0d0d0	guibg=#004000
+  highlight Folded		guifg=NONE	guibg=#004000
   highlight FoldColumn		guifg=#e0e0e0	guibg=#008000
-  highlight DiffAdd		guifg=fg	guibg=#000080
-  highlight DiffChange		guifg=fg	guibg=#800080
+  highlight DiffAdd		guifg=NONE	guibg=#000080
+  highlight DiffChange		guifg=NONE	guibg=#800080
   highlight DiffDelete		guifg=#6080f0	guibg=#202020
   highlight DiffText		guifg=#000000	guibg=#c0e080
   highlight SignColumn		guifg=#e0e0e0	guibg=#008000
   highlight IncSearch		guifg=#000000	guibg=#d0d0d0
   highlight StatusLineNC	guifg=#000000	guibg=#c0c0c0
   highlight VertSplit		guifg=#000000	guibg=#c0c0c0
-  highlight Underlined		guifg=#80a0ff	guibg=bg	gui=underline 
-  highlight Ignore		guifg=#000000	guibg=bg
+  highlight Underlined		guifg=#80a0ff	guibg=NONE	gui=underline 
+  highlight Ignore		guifg=#000000	guibg=NONE
   " NOTE THIS IS IN THE COOL SECTION
   if v:version >= 700
-    highlight SpellBad		guifg=NONE	guibg=NONE	guisp=#f08060
-    highlight SpellCap		guifg=NONE	guibg=NONE	guisp=#6080f0
-    highlight SpellRare		guifg=NONE	guibg=NONE	guisp=#f0c0f0
-    highlight SpellLocal	guifg=NONE	guibg=NONE	guisp=#c0d8f8
+    if has('spell')
+      highlight SpellBad	guifg=NONE	guibg=NONE	guisp=#f08060
+      highlight SpellCap	guifg=NONE	guibg=NONE	guisp=#6080f0
+      highlight SpellRare	guifg=NONE	guibg=NONE	guisp=#f0c0f0
+      highlight SpellLocal	guifg=NONE	guibg=NONE	guisp=#c0d8f8
+    endif
     highlight Pmenu		guifg=fg	guibg=#800080
     highlight PmenuSel		guifg=#000000	guibg=#d0d0d0
     highlight PmenuSbar		guifg=fg	guibg=#000080
     highlight PmenuThumb	guifg=fg	guibg=#008000
     highlight TabLine		guifg=fg	guibg=#008000	gui=underline
     highlight TabLineFill	guifg=fg	guibg=#008000	gui=underline
-    highlight TabLineSel	guifg=fg	guibg=bg
+    highlight TabLineSel	guifg=fg	guibg=NONE
     highlight CursorColumn	guifg=NONE	guibg=#800000
     highlight CursorLine	guifg=NONE	guibg=NONE	gui=underline
     highlight MatchParen	guifg=NONE	guibg=#800080
@@ -278,7 +315,7 @@ endif
 
 " Take NT gui for example, If you want to use a console font such as
 " Lucida_Console with font size larger than 14, the font looks already thick,
-" and the bold font for that will be too thick, you may not want it be bolded.
+" and the bold font for that will be too thick, you may not want it be bold.
 " The following code does this.
 "
 " All of the bold font may be disabled, since continuously switching between
@@ -295,7 +332,9 @@ if v:version >= 700
   MultiHi gui=NONE Ignore PmenuSel PmenuSel PmenuSbar PmenuThumb TabLine TabLineFill TabLineSel
 
   " the gui=undercurl guisp could only support in Vim 7
-  MultiHi gui=undercurl SpellBad SpellCap SpellRare SpellLocal
+  if has('spell')
+    MultiHi gui=undercurl SpellBad SpellCap SpellRare SpellLocal
+  endif
   if s:style=="cool" || s:style=="warm"
     MultiHi gui=underline TabLine TabLineFill Underlined CursorLine
   else
@@ -340,57 +379,85 @@ if !has('gui_running')
   " cterm settings {{{1
   if s:cterm_style=='cool'
 
-    highlight Normal	 ctermfg=LightGrey  ctermbg=Black
-    highlight Search	 ctermfg=White	    ctermbg=DarkRed
+    if s:cterm_transparent
+      highlight Normal		ctermfg=LightGrey   ctermbg=NONE
+      highlight Special		ctermfg=Yellow	    ctermbg=NONE
+      highlight Comment		ctermfg=DarkYellow  ctermbg=NONE
+      highlight Constant	ctermfg=Blue	    ctermbg=NONE
+      highlight Number		ctermfg=Yellow	    ctermbg=NONE
+      highlight LineNr		ctermfg=DarkGrey    ctermbg=NONE
+      highlight PreProc		ctermfg=Green	    ctermbg=NONE
+      highlight Statement	ctermfg=Cyan	    ctermbg=NONE
+      highlight Type		ctermfg=Cyan	    ctermbg=NONE
+      highlight Error		ctermfg=Red	    ctermbg=NONE
+      highlight Identifier	ctermfg=Magenta     ctermbg=NONE
+      highlight SpecialKey	ctermfg=Cyan	    ctermbg=NONE
+      highlight NonText		ctermfg=Blue	    ctermbg=NONE
+      highlight Directory	ctermfg=Blue	    ctermbg=NONE
+      highlight MoreMsg		ctermfg=Green	    ctermbg=NONE
+      highlight Title		ctermfg=Magenta     ctermbg=NONE
+      highlight WarningMsg	ctermfg=Red	    ctermbg=NONE
+      highlight DiffDelete	ctermfg=Blue	    ctermbg=NONE
+    else
+      highlight Normal		ctermfg=LightGrey   ctermbg=Black
+      highlight Special		ctermfg=Yellow	    ctermbg=bg
+      highlight Comment		ctermfg=DarkYellow  ctermbg=bg
+      highlight Constant	ctermfg=Blue	    ctermbg=bg
+      highlight Number		ctermfg=Yellow	    ctermbg=bg
+      highlight LineNr		ctermfg=DarkGrey    ctermbg=bg
+      highlight PreProc		ctermfg=Green	    ctermbg=bg
+      highlight Statement	ctermfg=Cyan	    ctermbg=bg
+      highlight Type		ctermfg=Cyan	    ctermbg=bg
+      highlight Error		ctermfg=Red	    ctermbg=bg
+      highlight Identifier	ctermfg=Magenta     ctermbg=bg
+      highlight SpecialKey	ctermfg=Cyan	    ctermbg=bg
+      highlight NonText		ctermfg=Blue	    ctermbg=bg
+      highlight Directory	ctermfg=Blue	    ctermbg=bg
+      highlight MoreMsg		ctermfg=Green	    ctermbg=bg
+      highlight Title		ctermfg=Magenta     ctermbg=bg
+      highlight WarningMsg	ctermfg=Red	    ctermbg=bg
+      highlight DiffDelete	ctermfg=Blue	    ctermbg=bg
+    endif
+    highlight Search	 ctermfg=NONE	    ctermbg=DarkRed
     highlight Visual	 ctermfg=Black	    ctermbg=DarkCyan
     highlight Cursor	 ctermfg=Black	    ctermbg=Green
-    highlight Special	 ctermfg=Yellow	    ctermbg=Black
-    highlight Comment	 ctermfg=DarkYellow ctermbg=Black
-    highlight Constant	 ctermfg=Blue	    ctermbg=Black
-    highlight Number	 ctermfg=Yellow	    ctermbg=Black
     highlight StatusLine ctermfg=Black	    ctermbg=DarkCyan
-    highlight LineNr	 ctermfg=DarkGrey   ctermbg=Black
     highlight Question	 ctermfg=Black	    ctermbg=DarkYellow
-    highlight PreProc	 ctermfg=Green	    ctermbg=Black
-    highlight Statement	 ctermfg=Cyan	    ctermbg=Black
-    highlight Type	 ctermfg=Cyan	    ctermbg=Black
     if s:inversed_todo==0
         highlight Todo	 ctermfg=DarkRed    ctermbg=DarkYellow
     else
         highlight Todo	 ctermfg=DarkYellow ctermbg=DarkBlue
     endif
-    highlight Error	 ctermfg=Red	    ctermbg=Black
-    highlight Identifier ctermfg=Magenta    ctermbg=Black
     highlight Folded	 ctermfg=White	    ctermbg=DarkGreen
     highlight ModeMsg	 ctermfg=Grey	    ctermbg=DarkBlue
     highlight VisualNOS	 ctermfg=Grey	    ctermbg=DarkBlue
-    highlight SpecialKey ctermfg=Cyan	    ctermbg=Black
-    highlight NonText	 ctermfg=Blue	    ctermbg=Black
-    highlight Directory	 ctermfg=Blue	    ctermbg=Black
     highlight ErrorMsg	 ctermfg=DarkYellow ctermbg=DarkRed
-    highlight MoreMsg	 ctermfg=Green	    ctermbg=Black
-    highlight Title	 ctermfg=Magenta    ctermbg=Black
-    highlight WarningMsg ctermfg=Red	    ctermbg=Black
     highlight WildMenu	 ctermfg=Black	    ctermbg=DarkYellow
     highlight FoldColumn ctermfg=White	    ctermbg=DarkGreen
     highlight SignColumn ctermfg=White	    ctermbg=DarkGreen
     highlight DiffText	 ctermfg=Black	    ctermbg=DarkYellow
-    highlight DiffDelete ctermfg=Blue	    ctermbg=Black
 
     if v:version >= 700
-      highlight SpellBad	ctermfg=NONE	ctermbg=DarkRed
-      highlight SpellCap	ctermfg=NONE	ctermbg=DarkBlue
-      highlight SpellRare	ctermfg=NONE	ctermbg=DarkMagenta
-      highlight SpellLocal	ctermfg=NONE	ctermbg=DarkGreen
+      if has('spell')
+        highlight SpellBad	ctermfg=NONE	ctermbg=DarkRed
+        highlight SpellCap	ctermfg=NONE	ctermbg=DarkBlue
+        highlight SpellRare	ctermfg=NONE	ctermbg=DarkMagenta
+        highlight SpellLocal	ctermfg=NONE	ctermbg=DarkGreen
+      endif
       highlight Pmenu		ctermfg=fg	ctermbg=DarkMagenta
-      highlight PmenuSel	ctermfg=bg	ctermbg=fg
+      highlight PmenuSel	ctermfg=Black	ctermbg=fg
       highlight PmenuSbar	ctermfg=fg	ctermbg=DarkBlue
       highlight PmenuThumb	ctermfg=fg	ctermbg=DarkGreen
       highlight TabLine		ctermfg=fg	ctermbg=DarkGreen	cterm=underline
       highlight TabLineFill	ctermfg=fg	ctermbg=DarkGreen	cterm=underline
-      highlight TabLineSel	ctermfg=fg	ctermbg=bg
       highlight CursorColumn	ctermfg=NONE	ctermbg=DarkRed
-      highlight CursorLine	ctermfg=NONE	ctermbg=NONE	cterm=underline
+      if s:cterm_transparent
+        highlight TabLineSel	ctermfg=fg	ctermbg=NONE
+        highlight CursorLine	ctermfg=NONE	ctermbg=NONE	cterm=underline
+      else
+        highlight TabLineSel	ctermfg=fg	ctermbg=bg
+        highlight CursorLine	ctermfg=NONE	ctermbg=bg	cterm=underline
+      endif
       highlight MatchParen	ctermfg=NONE	ctermbg=DarkMagenta
     endif
     if &t_Co==8
@@ -421,7 +488,7 @@ if !has('gui_running')
     endif
 
   elseif s:cterm_style=='defdark'
-    highlight Normal	 ctermfg=LightGrey  ctermbg=Black
+    highlight Normal	 ctermfg=LightGrey  ctermbg=NONE
   endif
   " }}}1
 endif
@@ -461,9 +528,11 @@ endif
 
 
 " Clean:
-"
+" these clean stuffs are proved to have problem, so I removed them.
 delcommand InitOpt
 delcommand MultiHi
+" delfunction init_option
+" delfunction multi_hi
 
 " vim:et:nosta:sw=2:ts=8:
 " vim600:fdm=marker:fdl=1:
@@ -507,7 +576,7 @@ finish
 " ---------------------------------------------------------------------
 " Put the help after the HelpExtractorDoc label...
 " HelpExtractorDoc:
-*ps_color.txt*  PSC For Vim version 7.0            Last change:  18 July 2006
+*ps_color.txt*  PSC For Vim version 7.0            Last change:  23 Oct 2006
 
 
 PERSONAL COLOUR SWITCHER                                *ps_colour* *pscolor*
@@ -522,7 +591,7 @@ CONTENTS                                                 *psc* *psc-contents*
 	2. PSC Overview.................|psc-overview|
 	3. PSC Installation.............|psc-usage|
 	4. PSC Options..................|psc-options|
-	5. PSC under color term ........|psc-cterm|
+	5. PSC under colour term .......|psc-cterm|
 	6. PSC FAQ and Tips ............|psc-faq|
 	7. PSC Release notes............|psc-release-notes|
 	8. PSC Todo List................|psc-todo|
@@ -546,26 +615,26 @@ PSC FEATURES OVERVIEW                           *psc-features* *psc-overview*
 
 	Design Concern ~
 
-	At the first glance this color scheme may look pretty 'dull', don't be
+	At the first glance this colour scheme may look pretty 'dull', don't be
 	afraid, this is quite normal.  Bear in mind that a text editor is not
 	a photo album, if a text editor looks exciting you may not be able to
 	stare at it for a long time.
 
-	Predefined Vim Syntax highlighting can be too colorful or contrasty so
+	Predefined Vim Syntax highlighting can be too colourful or contrasted so
 	that many programmers prefer to switch off the syntax highlighting at
 	work.  That is not a good idea because you will lost the advantages of
 	syntax high-lighting.  It is often the case that we have to work for
 	300+ minutes, then I decide to do-it-myself. 
 
 	Many user-defined color schemes in vim.sf.net tend to achieve low
-	contrast by having a strong color-cast, i.e. looks blueish or
+	contrast by having a strong color-cast, i.e., looks blueish or
 	yellowish or reddish.  This does look comfortable at first, however,
 	any type of color-cast will cause the eyes less sensitive for
 	particular color after a long-time work session, and that's no good to
 	health. 
 
 	Efforts had been made to ensure no color-cast for this scheme, all
-	elementary colors like RGB and CYMK are evenly used.  Like TeX,
+	elementary colours like RGB and CYMK are evenly used.  Like TeX,
 	'consistency' is the principle this color scheme based on.  Default
 	values which hurt consistency are amended according to the vim script
 	syntax/hitest.vim
@@ -592,7 +661,7 @@ PSC FEATURES OVERVIEW                           *psc-features* *psc-overview*
 	designing ViM color scheme.
 
 	I had made much attempt to make support for 8-color terminals,
-	however, 8 colors is not enough to represent a color scheme.  Finally
+	however, 8 colours is not enough to represent a color scheme.  Finally
 	I end up making the cterm support for 16-color terminal.  Have to say
 	sorry if the color scheme sucks in your 8-color terminal, I had tried
 	my best. More details about cterm please see |psc-cterm|.
@@ -602,7 +671,7 @@ PSC FEATURES OVERVIEW                           *psc-features* *psc-overview*
 
 	We have talked about off-white backgrounds, any background which is
 	not black, grey or white should be changed constantly in order not to
-	make the eyes less sensitive to particular color.  i.e. you can use
+	make the eyes less sensitive to particular color.  i.e., you can use
 	blue background on Monday, red background on Tuesday, green background
 	on Wednesday, but if you use blue background everyday, that's no good
 	to your health.
@@ -614,13 +683,13 @@ PSC FEATURES OVERVIEW                           *psc-features* *psc-overview*
 	
 	But I'll talk about something you may not know:
 >
-	It is easier to distinguish foreground colors on a dark background
+	It is easier to distinguish foreground colours on a dark background
 	than on a light background. 
 
-	At the same time, it is easier to distinguish background colors on
+	At the same time, it is easier to distinguish background colours on
 	a light background than on a dark background. 
 
-	We will mainly change foreground colors for syntax highlighting.
+	We will mainly change foreground colours for syntax highlighting.
 <
 	Hence, we can reduce the contrast and saturation of the color in
 	a dark-background scheme, while retain the readability. Schemes with
@@ -705,6 +774,18 @@ PSC OPTIONS                                                     *psc-options*
 	By default, it will be set to the same value as 'psc_style'. You can
 	change it if you want different style in cterm from gui.
 
+						      *psc_cterm_transparent*
+	Color Term Transparent ~
+>
+	let psc_cterm_transparent=1
+<
+	If this is set, cterm will use the transparent background.
+        i.e. the background will be the same as your terminal.
+	When background=dark, you should have a dark background for your
+        terminal, otherwise will result in poor readability.
+
+        If this is reset (the default), cterm will use the Black background
+        anyway.
 
 							       *psc_fontface*
 	Font face ~
@@ -714,10 +795,10 @@ PSC OPTIONS                                                     *psc-options*
 <
 	The Vim default behavior is the 'mixed', however, the mixed font style
 	in a dark colorscheme is not optimal. This color uses 'plain' for
-	'cool' style, i.e. No texts are bolded font. For 'warm', the default
+	'cool' style, i.e. No texts are bold font. For 'warm', the default
 	is still 'mixed', If you want the mixed style in which the highlighted
-	statements are bolded font, choose this. If you want all texts be
-	bolded, choose 'plain' and specify a bolded guifont or terminal font.
+	statements are bold font, choose this. If you want all texts be
+	bold, choose 'plain' and specify a bold guifont or terminal font.
 
 	In GUI, this option also works for other color schemes. You can
 	disable the bold font and use your favorite color scheme. See
@@ -830,12 +911,16 @@ PSC WITH CTERM                                                    *psc-cterm*
 	contact me, if you like.
 
 	*psc-cterm-xterm*
-	XTERM is a much more feature-rich terminal than Windows Console so the
-	support is much better, add the following recommend line into your
-	.Xdefaults and you can achieve the same color as in GUI version.
+        XTERM is a much more feature-rich terminal than Windows Console so the
+        support is much better. Normally, add the following recommend line
+        into your .Xdefaults and you can achieve the same color as in GUI
+        version, currently only works for XTERM and RXVT.
+
+        However, most modern GUI terminal emulators do not read .Xdefaults
+        at all, in that case you will have to set the color manually according
+        to |psc-cterm-color-table|.
  
-	Add the following into your .Xdefaults:
-	This works for XTERM and RXVT.
+        In case your term supports .Xdefaults, Add the following in it:
 >
 	XTerm*color0:           #000000
 	XTerm*color1:           #800000
@@ -857,7 +942,7 @@ PSC WITH CTERM                                                    *psc-cterm*
 
 	! The following are recommended but optional
 	XTerm*reverseVideo:     False
-	XTerm*background:       #000000
+	XTerm*background:       #202020
 	XTerm*foreground:       #d0d0d0
 	XTerm*boldMode:         False
 <
@@ -866,7 +951,7 @@ PSC WITH CTERM                                                    *psc-cterm*
 	RXVT and recompile it.
 
 	Sometimes the color mode are not recognized well, or you do not want
-	bright foreground be bolded. If this is the case, add the following in
+	bright foreground be bold. If this is the case, add the following in
 	your .vimrc (before the color scheme been sourced)
 >
 	if &term=='xterm'     " Change 'xterm' to your term name if necessary
@@ -874,7 +959,7 @@ PSC WITH CTERM                                                    *psc-cterm*
 	endif
 <
 	If the t_Co=16 have problem, set t_Co=8 and :colo ps_color again.
-	vice versa.
+	and vice versa.
 	
 	My rxvt works well with t_Co=16: >
 	Rxvt v2.7.10 - released: 26 MARCH 2003
@@ -890,7 +975,7 @@ PSC WITH CTERM                                                    *psc-cterm*
 
 	Hints for Manually set the color (for 'cool' style only):
 	*psc-cterm-color-table*
-	Color name	Hex value	Decimal value ~
+	Color name	Hex value	Decimal value (r,g,b)~
 	 0 Black	= #000000	0,0,0
 	 4 DarkBlue	= #000080	0,0,128
 	 2 DarkGreen	= #008000	0,128,0
@@ -928,7 +1013,7 @@ PSC FAQ AND TIPS                                         *psc-faq* *psc-tips*
 >
 	Q: What is meant by `PS' ? 
 <
-	A: PS means: PostScript, PhotoShop, PerSonal, ... or anything you can
+	A: PS means: PostScript, PhotoShop, PerSonal, ..., or anything you can
 	   imagine and anything you want it do be.
 >
 	Q: How to obtain the same appreance as gui in color term?
@@ -983,11 +1068,49 @@ PSC FAQ AND TIPS                                         *psc-faq* *psc-tips*
 	A: This is for Bram's guideline, that dark schemes with black
 	   background has too much contrast.
 
-           However, you can change it back. see |psc-change-background| for
+           However, you can change it back.  See |psc-change-background| for
            details.
+>
+        Q: Something changed/doesn't work on 3.00...
+<
+        A: See 3.00 Release note.
 
 ==============================================================================
 PSC RELEASE NOTES                                         *psc-release-notes*
+
+	3.00 Release Note: ~
+
+        GUI: now we accept the &background instead of the "warm" and "cool"
+        style value. So the "warm" and "cool" for psc_style are silently
+        ignored, all users must set the 'background' option manually before
+        :colo ps_color.
+
+        Since this is an incompatible change, I bump the version to 3.00
+
+        CTERM: if psc_style set to 'warm', the v2.90 before will set the style
+        to 'cool', the 3.00 will set the style to 'default' since the 
+        background change are eliminated in 3.00. So basically, if you had the
+        background=light in your color terminal, :color ps_color will have
+        little effect. 
+
+        Since the background setting can be wrong in cterm, the transparent
+        background are not the default. We added |psc_cterm_background| option
+        to change the bahavior.
+        
+        Checked spell with spelllang=en, changes in typos for document.
+
+	2.95 Release Note: ~
+
+        GUI: Make many foregrounds and backgrounds transparent, in most cases you
+        will not notice any difference. But you may feel better in some rare
+        case.
+
+        CTERM: if your terminal has a transparent background, then we can have
+        the transparent background in vim. Note that the terminal color scheme
+        has to be dark-background for maximum portability. If you have
+        a light-background terminal emulator and want to use ps_color color
+        scheme, please keep v2.90, or change your terminal background color to
+        a dark one.
 
 	2.90 Release Note: ~
 
@@ -1047,7 +1170,7 @@ PSC RELEASE NOTES                                         *psc-release-notes*
 
 	NonText as Notice is not good for 'warm', changed to Constant.
 
-	Added links for the most popular plugins: taglist, calendar
+	Added links for the most popular plug-ins: taglist, calendar
 
 	Tuned the 'Statement' color when different from Type (gui only).
 
@@ -1090,7 +1213,7 @@ PSC RELEASE NOTES                                         *psc-release-notes*
 
 	2.0 Release Note: ~
 
-	There've been great enhancement since this version, so I'd choose to
+	There have been great enhancement since this version, so I'd choose to
 	bump the version number to 2. This version comes with Vim online help,
 	if you had installed ps_color.txt, you can see for details in
 	|pscolor|
@@ -1105,7 +1228,7 @@ PSC TODO LIST                                                      *psc-todo*
 
 	. Fix the remain bugs.
 	. Follow the new Vim versions for new added highlighting group
-	. This cannot work in Vim Tiny mode, and will never work!
+	. This cannot work in Vim Small and Tiny mode, and will never work!
 
 ==============================================================================
 vim:et:nosta:sw=2:ts=8:
